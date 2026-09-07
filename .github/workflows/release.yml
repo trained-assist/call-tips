@@ -15,8 +15,6 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg
@@ -31,8 +29,6 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: win-installer
