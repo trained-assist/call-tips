@@ -170,6 +170,20 @@ ipcMain.handle('stop-call', () => {
   return true;
 });
 
+let isPinned = true;
+ipcMain.handle('toggle-pin', () => {
+  if (!overlayWindow) return isPinned;
+  isPinned = !isPinned;
+  if (isPinned) {
+    overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+    overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } else {
+    overlayWindow.setAlwaysOnTop(false);
+    overlayWindow.setVisibleOnAllWorkspaces(false);
+  }
+  return isPinned;
+});
+
 // OpenRouter proxy (avoids CORS in renderer)
 ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode }) => {
   return new Promise((resolve, reject) => {

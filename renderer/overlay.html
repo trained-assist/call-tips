@@ -45,6 +45,17 @@
     cursor: pointer; flex-shrink: 0;
   }
   .stop-btn:hover { background: rgba(239,68,68,.25); }
+  .pin-btn {
+    -webkit-app-region: no-drag;
+    background: rgba(99,102,241,.2); border: 1px solid rgba(99,102,241,.4);
+    color: #818cf8; border-radius: 5px; padding: 3px 8px; font-size: 11px;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .pin-btn.unpinned {
+    background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.1);
+    color: #4a5568;
+  }
+  .pin-btn:hover { opacity: .8; }
 
   .tabs {
     display: flex;
@@ -112,6 +123,7 @@
   <div class="titlebar">
     <div class="rec-dot" id="recDot" style="display:none"></div>
     <span class="title-text" id="titleText">Подключение…</span>
+    <button class="pin-btn" id="pinBtn" title="Поверх всех окон">📌 Поверх</button>
     <button class="stop-btn" id="stopBtn">■ Стоп</button>
   </div>
 
@@ -168,6 +180,20 @@ window.api.onSessionData(async (data) => {
   renderPlan(session.plan);
   setStatus('Запускаю микрофон…');
   await startMic();
+});
+
+// ── Pin toggle ─────────────────────────────────────────────────────────────
+let pinned = true;
+document.getElementById('pinBtn').addEventListener('click', async () => {
+  pinned = await window.api.togglePin();
+  const btn = document.getElementById('pinBtn');
+  if (pinned) {
+    btn.textContent = '📌 Поверх';
+    btn.classList.remove('unpinned');
+  } else {
+    btn.textContent = '📌 Не поверх';
+    btn.classList.add('unpinned');
+  }
 });
 
 // ── Stop ───────────────────────────────────────────────────────────────────
