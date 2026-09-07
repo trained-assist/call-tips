@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Call Tips</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    font-size: 13px;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .header {
+    background: #1a1d27;
+    border-bottom: 1px solid #2d3148;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header h1 { font-size: 15px; font-weight: 600; color: #fff; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
+  .body { padding: 16px 20px; overflow-y: auto; height: calc(100vh - 54px); }
+
+  label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 5px; margin-top: 14px; text-transform: uppercase; letter-spacing: .5px; }
+  label:first-child { margin-top: 0; }
+  input[type=text], textarea, select {
+    width: 100%; background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px;
+    color: #e2e8f0; font-size: 13px; font-family: inherit; padding: 8px 10px;
+    outline: none; resize: vertical;
+  }
+  input[type=text]:focus, textarea:focus, select:focus { border-color: #6366f1; }
+  textarea { height: 90px; }
+
+  .seg { display: flex; gap: 4px; }
+  .seg button {
+    flex: 1; padding: 6px; background: #1a1d27; border: 1px solid #2d3148;
+    border-radius: 5px; color: #94a3b8; font-size: 12px; cursor: pointer;
+  }
+  .seg button.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+
+  .drop-hint { font-size: 11px; color: #4a5568; margin-top: 4px; }
+
+  .actions { display: flex; gap: 8px; margin-top: 18px; }
+  .btn {
+    flex: 1; padding: 9px; border-radius: 7px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; transition: opacity .15s;
+  }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-secondary { background: #1e2235; color: #94a3b8; border: 1px solid #2d3148; }
+  .btn-primary:not(:disabled):hover { opacity: .85; }
+  .btn-secondary:not(:disabled):hover { color: #e2e8f0; }
+
+  /* Plan review */
+  .plan-view { display: none; }
+  .plan-section { margin-top: 12px; }
+  .plan-section h3 { font-size: 12px; color: #6366f1; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .plan-q { background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px; padding: 8px 10px; margin-bottom: 5px; font-size: 12px; line-height: 1.5; }
+  .plan-q .followup { color: #94a3b8; font-size: 11px; margin-top: 4px; }
+
+  #status { font-size: 11px; color: #6366f1; margin-top: 8px; min-height: 16px; }
+
+  .key-hint { font-size: 11px; color: #4a5568; margin-top: 16px; text-align: center; }
+  .key-hint span { color: #ef4444; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="dot"></div>
+  <h1>Call Tips</h1>
+</div>
+<div class="body">
+  <!-- ===== SETUP FORM ===== -->
+  <div id="formView">
+    <label>Имя собеседника</label>
+    <input type="text" id="candidateName" placeholder="Иван Петров">
+
+    <label>Длительность (мин)</label>
+    <div class="seg" id="durationSeg">
+      <button data-v="15">15</button>
+      <button data-v="30" class="active">30</button>
+      <button data-v="60">60</button>
+    </div>
+
+    <label>Резюме / описание собеседника</label>
+    <textarea id="resumeText" placeholder="Вставьте текст резюме, ссылку на HH или перетащите PDF/DOCX..."></textarea>
+    <div class="drop-hint">Перетащите файл или вставьте ссылку</div>
+
+    <label>Вакансия / тема разговора</label>
+    <textarea id="jobText" placeholder="Опишите роль, требования или тему звонка..."></textarea>
+
+    <label>Язык</label>
+    <select id="lang">
+      <option value="ru">Русский</option>
+      <option value="en">English</option>
+      <option value="de">Deutsch</option>
+      <option value="es">Español</option>
+    </select>
+
+    <div id="status"></div>
+
+    <div class="actions">
+      <button class="btn btn-secondary" id="btnPlan">📋 Создать план</button>
+      <button class="btn btn-primary" id="btnStart">▶ Начать</button>
+    </div>
+
+    <div class="key-hint" id="keyHint"></div>
+  </div>
+
+  <!-- ===== PLAN REVIEW ===== -->
+  <div id="planView" class="plan-view">
+    <div id="planContent"></div>
+    <div class="actions" style="margin-top:16px">
+      <button class="btn btn-secondary" id="btnBack">← Назад</button>
+      <button class="btn btn-primary" id="btnStartPlan">▶ Начать с планом</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let config = {};
+let duration = 30;
+let plan = null;
+
+window.api.getConfig().then(c => {
+  config = c;
+  if (!c.deepgramKey) {
+    document.getElementById('keyHint').innerHTML = '⚠️ Нет <span>DEEPGRAM_API_KEY</span> в .env';
+  }
+  if (!c.openrouterKey) {
+    document.getElementById('status').textContent = 'Нет OPENROUTER_API_KEY — план недоступен';
+    document.getElementById('btnPlan').disabled = true;
+  }
+});
+
+// Duration seg
+document.getElementById('durationSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  duration = +btn.dataset.v;
+  document.querySelectorAll('#durationSeg button').forEach(b => b.classList.toggle('active', b === btn));
+});
+
+// Drag-and-drop on textareas
+function setupDrop(ta) {
+  ta.addEventListener('dragover', e => { e.preventDefault(); ta.style.borderColor = '#6366f1'; });
+  ta.addEventListener('dragleave', () => { ta.style.borderColor = ''; });
+  ta.addEventListener('drop', async e => {
+    e.preventDefault();
+    ta.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (file.name.endsWith('.pdf')) {
+      ta.value = `[PDF: ${file.name} — текст будет извлечён при анализе]`;
+      ta.dataset.file = file.name;
+    } else {
+      const text = await file.text();
+      ta.value = text.slice(0, 5000);
+    }
+  });
+}
+setupDrop(document.getElementById('resumeText'));
+setupDrop(document.getElementById('jobText'));
+
+function getSessionBase() {
+  return {
+    candidateName: document.getElementById('candidateName').value.trim() || 'Собеседник',
+    resumeText: document.getElementById('resumeText').value.trim(),
+    jobText: document.getElementById('jobText').value.trim(),
+    duration,
+    lang: document.getElementById('lang').value,
+    deepgramKey: config.deepgramKey,
+  };
+}
+
+// Start without plan
+document.getElementById('btnStart').addEventListener('click', () => {
+  window.api.startCall({ ...getSessionBase(), plan: null });
+});
+
+// Create plan
+document.getElementById('btnPlan').addEventListener('click', async () => {
+  const btn = document.getElementById('btnPlan');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.textContent = '⏳ Создаю план интервью…';
+
+  const s = getSessionBase();
+  const qCount = duration < 20 ? 4 : duration < 45 ? 8 : 14;
+
+  const messages = [{
+    role: 'user',
+    content: `Ты опытный рекрутер. Составь план интервью на ${duration} минут.
+Кандидат: ${s.candidateName}
+РЕЗЮМЕ: ${s.resumeText.slice(0, 3000) || '(не указано)'}
+ТЕМА / ВАКАНСИЯ: ${s.jobText.slice(0, 2000) || '(не указана)'}
+
+Сгенерируй примерно ${qCount} вопросов в 3 блоках: технические/профессиональные, soft skills, менеджерские/ситуационные.
+Для каждого вопроса — необязательный уточняющий followUp.
+
+Верни ТОЛЬКО JSON:
+{"sections":[{"category":"technical","title":"Профессиональный опыт","questions":[{"text":"...","followUp":"..."}]},{"category":"soft","title":"Soft Skills","questions":[...]},{"category":"situational","title":"Ситуационные","questions":[...]}]}`
+  }];
+
+  try {
+    const raw = await window.api.llmCall({ messages, maxTokens: 2000, jsonMode: true });
+    const parsed = JSON.parse(raw);
+    plan = parsed;
+    renderPlan(parsed);
+    document.getElementById('formView').style.display = 'none';
+    document.getElementById('planView').style.display = 'block';
+    status.textContent = '';
+  } catch (e) {
+    status.textContent = '❌ Ошибка создания плана: ' + e.message;
+  }
+  btn.disabled = false;
+});
+
+function renderPlan(p) {
+  const el = document.getElementById('planContent');
+  const categoryLabel = { technical: '🔧 Технические', soft: '🤝 Soft Skills', situational: '💡 Ситуационные' };
+  el.innerHTML = (p.sections || []).map(sec => `
+    <div class="plan-section">
+      <h3>${categoryLabel[sec.category] || sec.title || sec.category}</h3>
+      ${(sec.questions || []).map(q => `
+        <div class="plan-q">
+          ${escHtml(q.text)}
+          ${q.followUp ? `<div class="followup">↳ ${escHtml(q.followUp)}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+document.getElementById('btnBack').addEventListener('click', () => {
+  document.getElementById('formView').style.display = 'block';
+  document.getElementById('planView').style.display = 'none';
+});
+
+document.getElementById('btnStartPlan').addEventListener('click', () => {
+  window.api.startCall({ ...getSessionBase(), plan });
+});
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
