@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   stopCall: () => ipcRenderer.invoke('stop-call'),
   llmCall: (payload) => ipcRenderer.invoke('llm-call', payload),
   togglePin: () => ipcRenderer.invoke('toggle-pin'),
+  loadAgentSession: () => ipcRenderer.invoke('load-agent-session'),
   onSessionData: (cb) => ipcRenderer.on('session-data', (_, data) => cb(data)),
   removeSessionDataListener: () => ipcRenderer.removeAllListeners('session-data'),
 });

@@ -170,6 +170,32 @@ ipcMain.handle('stop-call', () => {
   return true;
 });
 
+// Load latest session written by trained-assist-agent
+ipcMain.handle('load-agent-session', () => {
+  const os = require('os');
+  const fs = require('fs');
+  const dataDir = process.env.AGENT_DATA_DIR || path.join(os.homedir(), 'agent-data');
+  const sessionsDir = path.join(dataDir, 'sessions');
+  try {
+    // Find most recently modified calltips-latest.json across all profiles
+    const profiles = fs.readdirSync(sessionsDir).filter(f =>
+      fs.statSync(path.join(sessionsDir, f)).isDirectory()
+    );
+    let newest = null, newestTime = 0;
+    for (const profile of profiles) {
+      const p = path.join(sessionsDir, profile, 'calltips-latest.json');
+      if (fs.existsSync(p)) {
+        const t = fs.statSync(p).mtimeMs;
+        if (t > newestTime) { newestTime = t; newest = p; }
+      }
+    }
+    if (!newest) return { error: 'Файл calltips-latest.json не найден. Скажите агенту: "подготовь план для звонка с [имя]"' };
+    return JSON.parse(fs.readFileSync(newest, 'utf8'));
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 let isPinned = true;
 ipcMain.handle('toggle-pin', () => {
   if (!overlayWindow) return isPinned;
