@@ -170,31 +170,51 @@ ipcMain.handle('stop-call', () => {
   return true;
 });
 
-// Load latest session written by trained-assist-agent
-ipcMain.handle('load-agent-session', () => {
+// Load latest Call Tips session from trained-assist-agent via HTTP endpoint
+ipcMain.handle('load-agent-session', (_, opts = {}) => {
+  const agentUrl    = opts.url     || process.env.AGENT_URL     || 'https://recruiter-assistant.ru';
+  const agentSecret = opts.secret  || process.env.AGENT_SECRET  || '';
+  const profile     = opts.profile || process.env.AGENT_PROFILE || 'recruiter';
+
+  return new Promise((resolve) => {
+    const urlParsed = new URL(`${agentUrl}/calltips-session?profile=${encodeURIComponent(profile)}`);
+    const options = {
+      hostname: urlParsed.hostname,
+      path: urlParsed.pathname + urlParsed.search,
+      method: 'GET',
+      headers: { Authorization: `Bearer ${agentSecret}` },
+      timeout: 8000,
+    };
+    const mod = urlParsed.protocol === 'https:' ? https : require('http');
+    const req = mod.request(options, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode !== 200) resolve({ error: parsed.error || `HTTP ${res.statusCode}` });
+          else resolve(parsed);
+        } catch { resolve({ error: 'Ошибка парсинга ответа агента' }); }
+      });
+    });
+    req.on('error', () => resolve(tryLocalFallback()));
+    req.on('timeout', () => { req.destroy(); resolve(tryLocalFallback()); });
+    req.end();
+  });
+});
+
+function tryLocalFallback() {
   const os = require('os');
   const fs = require('fs');
   const dataDir = process.env.AGENT_DATA_DIR || path.join(os.homedir(), 'agent-data');
-  const sessionsDir = path.join(dataDir, 'sessions');
+  const profile = process.env.AGENT_PROFILE || 'recruiter';
+  const filePath = path.join(dataDir, 'sessions', profile, 'calltips-latest.json');
   try {
-    // Find most recently modified calltips-latest.json across all profiles
-    const profiles = fs.readdirSync(sessionsDir).filter(f =>
-      fs.statSync(path.join(sessionsDir, f)).isDirectory()
-    );
-    let newest = null, newestTime = 0;
-    for (const profile of profiles) {
-      const p = path.join(sessionsDir, profile, 'calltips-latest.json');
-      if (fs.existsSync(p)) {
-        const t = fs.statSync(p).mtimeMs;
-        if (t > newestTime) { newestTime = t; newest = p; }
-      }
-    }
-    if (!newest) return { error: 'Файл calltips-latest.json не найден. Скажите агенту: "подготовь план для звонка с [имя]"' };
-    return JSON.parse(fs.readFileSync(newest, 'utf8'));
-  } catch (e) {
-    return { error: e.message };
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return { error: 'Агент недоступен и локальный файл не найден. Скажите агенту: "подготовь план для звонка с [имя]"' };
   }
-});
+}
 
 let isPinned = true;
 ipcMain.handle('toggle-pin', () => {

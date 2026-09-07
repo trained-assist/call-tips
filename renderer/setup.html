@@ -112,6 +112,25 @@
       <button class="btn btn-primary" id="btnStart">▶ Начать</button>
     </div>
 
+    <!-- Agent connection -->
+    <div id="agentSection" style="margin-top:14px">
+      <div id="agentToggle" style="font-size:11px;color:#4a5568;cursor:pointer;user-select:none" onclick="toggleAgentSettings()">
+        🔗 Подключение к агенту ▸
+      </div>
+      <div id="agentSettings" style="display:none;margin-top:8px">
+        <label>URL агента</label>
+        <input type="text" id="agentUrl" placeholder="https://recruiter-assistant.ru">
+        <label style="margin-top:8px">Токен (AGENT_SECRET)</label>
+        <input type="password" id="agentToken" placeholder="Токен из настроек агента">
+        <label style="margin-top:8px">Профиль</label>
+        <input type="text" id="agentProfile" placeholder="recruiter">
+        <div id="agentStatus" style="font-size:11px;color:#6366f1;margin-top:6px;min-height:14px"></div>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn btn-secondary" id="btnConnect" style="background:#1a2035;border-color:#3d4268;color:#818cf8">🔗 Проверить соединение</button>
+        </div>
+      </div>
+    </div>
+
     <div class="key-hint" id="keyHint"></div>
   </div>
 
@@ -141,13 +160,63 @@ window.api.getConfig().then(c => {
   }
 });
 
+// ── Agent settings (localStorage) ─────────────────────────────────────────
+function loadAgentSettings() {
+  try {
+    document.getElementById('agentUrl').value     = localStorage.getItem('agentUrl')     || 'https://recruiter-assistant.ru';
+    document.getElementById('agentToken').value   = localStorage.getItem('agentToken')   || '';
+    document.getElementById('agentProfile').value = localStorage.getItem('agentProfile') || 'recruiter';
+    if (localStorage.getItem('agentToken')) {
+      document.getElementById('agentToggle').innerHTML = '🔗 Подключение к агенту ✅ ▸';
+    }
+  } catch {}
+}
+function saveAgentSettings() {
+  try {
+    localStorage.setItem('agentUrl',     document.getElementById('agentUrl').value.trim());
+    localStorage.setItem('agentToken',   document.getElementById('agentToken').value.trim());
+    localStorage.setItem('agentProfile', document.getElementById('agentProfile').value.trim() || 'recruiter');
+  } catch {}
+}
+function getAgentOpts() {
+  return {
+    url:     (localStorage.getItem('agentUrl')     || '').trim() || undefined,
+    secret:  (localStorage.getItem('agentToken')   || '').trim() || undefined,
+    profile: (localStorage.getItem('agentProfile') || '').trim() || undefined,
+  };
+}
+function toggleAgentSettings() {
+  const el = document.getElementById('agentSettings');
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  document.getElementById('agentToggle').innerHTML =
+    open ? '🔗 Подключение к агенту ▸' : '🔗 Подключение к агенту ▾';
+}
+loadAgentSettings();
+
+document.getElementById('btnConnect').addEventListener('click', async () => {
+  saveAgentSettings();
+  const btn = document.getElementById('btnConnect');
+  const agentStatus = document.getElementById('agentStatus');
+  btn.disabled = true;
+  agentStatus.textContent = '⏳ Проверяю…';
+  const data = await window.api.loadAgentSession(getAgentOpts());
+  btn.disabled = false;
+  if (data.error) {
+    agentStatus.textContent = '❌ ' + data.error;
+  } else {
+    agentStatus.textContent = `✅ Соединение OK — найден кандидат: ${data.candidateName || '(без имени)'}`;
+    document.getElementById('agentToggle').innerHTML = '🔗 Подключение к агенту ✅ ▸';
+  }
+});
+
 // Load from agent
 document.getElementById('btnAgent').addEventListener('click', async () => {
   const btn = document.getElementById('btnAgent');
   const status = document.getElementById('status');
   btn.disabled = true;
   btn.textContent = '⏳ Загружаю…';
-  const data = await window.api.loadAgentSession();
+  const data = await window.api.loadAgentSession(getAgentOpts());
   btn.disabled = false;
   btn.textContent = '📥 Из агента';
   if (data.error) { status.textContent = '⚠️ ' + data.error; return; }
