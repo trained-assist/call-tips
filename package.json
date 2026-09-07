@@ -12,13 +12,18 @@
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
-    "electron": "^31.3.0",
+    "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
   },
   "build": {
     "appId": "ru.recruiter-assistant.call-tips",
     "productName": "Call Tips",
-    "files": ["main.js", "preload.js", "renderer/**/*", ".env"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      ".env"
+    ],
     "win": {
       "target": "nsis",
       "icon": "icon.ico"
