@@ -14,18 +14,13 @@ if (process.platform === 'darwin') {
   app.dock.hide();
 }
 
-// ── Tray icon (16×16 white mic silhouette, template image for macOS) ────────
+// ── Tray icon — 1×1 transparent PNG (macOS shows tray.setTitle text instead) ─
 function buildTrayIcon() {
-  // 16×16 white PNG encoded as base64 — simple mic shape on transparent bg
-  // Generated inline so no external file needed
-  const ICON_B64 =
-    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwY' +
-    'AAAAsklEQVQ4y2NgIID/VMgzEFIDALiIBAT8QpAHYUABDGQwwz4JLgDg4wMIGCJogE2ACBX' +
-    'ZuU5dAN4HMvFM6MGEQAAAAbJRU5ErkJggg==';
-
-  // Use a simple emoji+title approach instead (most reliable cross-platform)
-  const empty = nativeImage.createEmpty();
-  return empty;
+  // Minimal valid 1×1 transparent PNG — just needs to be a valid image
+  const TRANSPARENT_1x1 =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
+    'AAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=';
+  return nativeImage.createFromDataURL(TRANSPARENT_1x1);
 }
 
 function createSetupWindow() {
