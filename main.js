@@ -14,13 +14,21 @@ if (process.platform === 'darwin') {
   app.dock.hide();
 }
 
-// ── Tray icon — 1×1 transparent PNG (macOS shows tray.setTitle text instead) ─
+// ── Tray icon ───────────────────────────────────────────────────────────────
+// macOS: 1×1 transparent + emoji title; Windows/Linux: PNG file
 function buildTrayIcon() {
-  // Minimal valid 1×1 transparent PNG — just needs to be a valid image
-  const TRANSPARENT_1x1 =
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
-    'AAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=';
-  return nativeImage.createFromDataURL(TRANSPARENT_1x1);
+  if (process.platform === 'darwin') {
+    const TRANSPARENT_1x1 =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
+      'AAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=';
+    return nativeImage.createFromDataURL(TRANSPARENT_1x1);
+  }
+  const iconPath = path.join(__dirname, 'icon.png');
+  const fs = require('fs');
+  if (fs.existsSync(iconPath)) return nativeImage.createFromPath(iconPath);
+  // Fallback: inline 16×16 yellow bolt
+  const BOLT_16 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAIElEQVR4nGNgoAT8v4OChrsGNKWEtdFeAx79I0wDdQAAIdaJT9Y02uIAAAAASUVORK5CYII=';
+  return nativeImage.createFromDataURL(BOLT_16);
 }
 
 function createSetupWindow() {
@@ -69,9 +77,12 @@ function createOverlayWindow() {
     },
   });
   overlayWindow.loadFile(path.join(__dirname, 'renderer', 'overlay.html'));
-  // Level 'screen-saver' = above fullscreen video call windows on macOS
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  if (process.platform === 'darwin') {
+    overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+    overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } else {
+    overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  }
 
   overlayWindow.on('closed', () => { overlayWindow = null; });
 
@@ -221,11 +232,17 @@ ipcMain.handle('toggle-pin', () => {
   if (!overlayWindow) return isPinned;
   isPinned = !isPinned;
   if (isPinned) {
-    overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-    overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    if (process.platform === 'darwin') {
+      overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+      overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    } else {
+      overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+    }
   } else {
     overlayWindow.setAlwaysOnTop(false);
-    overlayWindow.setVisibleOnAllWorkspaces(false);
+    if (process.platform === 'darwin') {
+      overlayWindow.setVisibleOnAllWorkspaces(false);
+    }
   }
   return isPinned;
 });
