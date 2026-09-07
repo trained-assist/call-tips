@@ -192,9 +192,9 @@ ipcMain.handle('load-agent-session', (_, opts = {}) => {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          if (res.statusCode !== 200) resolve({ error: parsed.error || `HTTP ${res.statusCode}` });
+          if (res.statusCode !== 200) resolve(tryLocalFallback());
           else resolve(parsed);
-        } catch { resolve({ error: 'Ошибка парсинга ответа агента' }); }
+        } catch { resolve(tryLocalFallback()); }
       });
     });
     req.on('error', () => resolve(tryLocalFallback()));
