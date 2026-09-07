@@ -4,7 +4,8 @@
   "description": "AI interview coaching overlay — Electron, cross-platform (Win + Mac)",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node_modules/.bin/electron .",
+    "postinstall": "xattr -cr node_modules/electron/dist/ 2>/dev/null || true; codesign --force --deep --sign - node_modules/electron/dist/Electron.app 2>/dev/null || true",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac"
   },
