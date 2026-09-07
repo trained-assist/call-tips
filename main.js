@@ -247,6 +247,40 @@ ipcMain.handle('toggle-pin', () => {
   return isPinned;
 });
 
+// Call Tips — get coaching tip from agent (avoids OPENROUTER key in client)
+ipcMain.handle('calltips-tips', (_, opts = {}) => {
+  const agentUrl    = opts.url     || process.env.AGENT_URL     || 'https://recruiter-assistant.ru';
+  const agentSecret = opts.secret  || process.env.AGENT_SECRET  || '';
+  const body = JSON.stringify(opts.payload || {});
+
+  return new Promise((resolve) => {
+    const urlParsed = new URL(`${agentUrl}/calltips-tips`);
+    const mod = urlParsed.protocol === 'https:' ? https : require('http');
+    const req = mod.request({
+      hostname: urlParsed.hostname,
+      path: urlParsed.pathname,
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${agentSecret}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      timeout: 15000,
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve({ dig: '', next: '', why: '' }); }
+      });
+    });
+    req.on('error', () => resolve(null)); // null = fall back to direct OpenRouter in renderer
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+});
+
 // OpenRouter proxy (avoids CORS in renderer)
 ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode }) => {
   return new Promise((resolve, reject) => {

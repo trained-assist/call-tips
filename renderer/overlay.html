@@ -329,18 +329,47 @@ async function maybeFetchTips() {
   isFetchingTips = true;
   setStatus('⏳ Думаю над подсказкой…');
 
-  const planContext = buildPlanContext();
-  const recent = transcript.filter(l => l.final).slice(-20).map(l =>
-    `${l.speaker === 'me' ? 'Я' : 'Они'}: ${l.text}`
-  ).join('\n');
+  const finalTranscript = transcript.filter(l => l.final);
 
-  const messages = [{
-    role: 'user',
-    content: `Ты — помощник интервьюера в реальном времени. Слушаешь разговор и даёшь ОДИН острый уточняющий вопрос.
+  try {
+    let tips = null;
+
+    // Try agent endpoint first (keeps API keys server-side)
+    const agentOpts = (() => {
+      try {
+        return {
+          url: localStorage.getItem('agentUrl') || undefined,
+          secret: localStorage.getItem('agentToken') || undefined,
+        };
+      } catch { return {}; }
+    })();
+
+    if (agentOpts.secret) {
+      tips = await window.api.calltipsTips({
+        ...agentOpts,
+        payload: {
+          transcript: finalTranscript.slice(-20),
+          candidateName: session.candidateName,
+          jobText: session.jobText,
+          lang: session.lang || 'ru',
+          plan: session.plan,
+          askedQuestions: [...questionsAsked],
+        },
+      });
+    }
+
+    // Fallback: direct OpenRouter (needs OPENROUTER_API_KEY in .env)
+    if (!tips) {
+      const planContext = buildPlanContext();
+      const recent = finalTranscript.slice(-20).map(l =>
+        `${l.speaker === 'me' ? 'Я' : 'Они'}: ${l.text}`
+      ).join('\n');
+
+      const messages = [{
+        role: 'user',
+        content: `Ты — помощник интервьюера в реальном времени. Слушаешь разговор и даёшь ОДИН острый уточняющий вопрос.
 
 ПРАВИЛО: зацепись за конкретное слово или деталь из последней реплики собеседника. Не оценивай — уточняй.
-Пример: собеседник сказал "делал лапароскопию" → следующий вопрос: "А когда вы выбираете открытую операцию вместо лапароскопии?"
-Пример: сказал "работал с PostgreSQL" → "Расскажите о самой сложной проблеме с индексами, которую решали в PostgreSQL."
 
 Собеседник: ${session.candidateName || 'собеседник'}
 Тема: ${(session.jobText || '').slice(0, 300) || '(не указана)'}
@@ -351,15 +380,16 @@ ${planContext || '(без плана)'}
 ПОСЛЕДНИЕ РЕПЛИКИ:
 ${recent || '(пока нет)'}
 
-Верни ТОЛЬКО JSON (без обёртки):
-{"next":"Если в плане есть незаданный важный вопрос — задай его. Иначе пустая строка.","dig":"ГЛАВНОЕ: один острый уточняющий вопрос к последней реплике собеседника — зацепись за конкретную деталь или ключевое слово. Всегда заполняй если есть реплики.","why":"Если собеседник дал размытый ответ — попроси конкретный пример. Иначе пустая строка."}
-Язык ответа: ${session.lang === 'en' ? 'English' : 'русский'}. Пустая строка если подсказка не нужна.`
-  }];
+Верни ТОЛЬКО JSON:
+{"next":"Если в плане есть незаданный важный вопрос — задай его. Иначе пустая строка.","dig":"ГЛАВНОЕ: один острый уточняющий вопрос к последней реплике — зацепись за конкретную деталь. Всегда заполняй если есть реплики.","why":"Если ответ размытый — попроси конкретный пример. Иначе пустая строка."}
+Язык: ${session.lang === 'en' ? 'English' : 'русский'}.`,
+      }];
 
-  try {
-    const raw = await window.api.llmCall({ messages, maxTokens: 300, jsonMode: true });
-    const tips = JSON.parse(raw);
-    renderTips(tips);
+      const raw = await window.api.llmCall({ messages, maxTokens: 300, jsonMode: true });
+      tips = JSON.parse(raw);
+    }
+
+    if (tips) renderTips(tips);
     setStatus('✅ Deepgram подключён, говорите…');
   } catch (e) {
     setStatus('Ошибка LLM: ' + e.message);
