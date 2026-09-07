@@ -62,22 +62,18 @@
   .pane { position: absolute; inset: 0; overflow-y: auto; padding: 10px; display: none; }
   .pane.active { display: block; }
 
-  /* Tips */
-  .tip-card {
-    border-radius: 8px; padding: 9px 11px; margin-bottom: 7px;
-    font-size: 12px; line-height: 1.5;
-    border: 1px solid rgba(255,255,255,0.06);
-    animation: fadeIn .25s ease;
-  }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
-  .tip-card.quick  { background: rgba(74,222,128,.08); border-color: rgba(74,222,128,.2); }
-  .tip-card.main   { background: rgba(251,146,60,.08); border-color: rgba(251,146,60,.2); }
-  .tip-card.clarify{ background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.25); }
-  .tip-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
-  .tip-card.quick .tip-label { color: #4ade80; }
-  .tip-card.main .tip-label  { color: #fb923c; }
-  .tip-card.clarify .tip-label{ color: #818cf8; }
-  .tip-text { color: #e2e8f0; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  /* Tips — plain text */
+  .tips-block { animation: fadeIn .2s; }
+  .tip-line { font-size: 12px; line-height: 1.6; margin-bottom: 6px; color: #e2e8f0; }
+  .tip-line .tip-emoji { margin-right: 4px; }
+  .tip-line.dig   { color: #fff; font-size: 13px; }
+  .tip-line.next  { color: #cbd5e1; }
+  .tip-line.why   { color: #94a3b8; }
+  .tips-divider { border: none; border-top: 1px solid rgba(255,255,255,.07); margin: 8px 0; }
+  .tips-prev { opacity: .4; font-size: 11px; line-height: 1.5; color: #64748b; margin-bottom: 5px; }
+
   .no-tips { color: #4a5568; font-size: 12px; text-align: center; padding: 20px 0; }
 
   /* Plan questions */
@@ -155,6 +151,7 @@ let micStream = null;
 let sysStream = null;
 let isFetchingTips = false;
 let questionsAsked = new Set();
+let tipHistory = []; // [{dig, next, why}] — last 5 sets
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
@@ -357,23 +354,31 @@ function buildPlanContext() {
 
 // ── Tips render ────────────────────────────────────────────────────────────
 function renderTips(tips) {
-  const tipDefs = [
-    { key: 'dig',  cls: 'main',    label: '🔍 Уточни детали' },
-    { key: 'next', cls: 'quick',   label: '⚡ Следующий вопрос' },
-    { key: 'why',  cls: 'clarify', label: '❓ Попроси пример' },
-  ];
-  const cards = tipDefs
-    .filter(d => tips[d.key] && tips[d.key].trim())
-    .map(d => `<div class="tip-card ${d.cls}">
-      <div class="tip-label">${d.label}</div>
-      <div class="tip-text">${escHtml(tips[d.key])}</div>
-    </div>`).join('');
+  if (tips.dig || tips.next || tips.why) {
+    tipHistory.unshift(tips);
+    if (tipHistory.length > 5) tipHistory.pop();
+  }
 
   const el = document.getElementById('pane-tips');
-  document.getElementById('noTips').style.display = cards ? 'none' : 'block';
-  // Remove old tip cards, keep noTips div
-  el.querySelectorAll('.tip-card').forEach(c => c.remove());
-  el.insertAdjacentHTML('afterbegin', cards);
+  document.getElementById('noTips').style.display = 'none';
+  el.querySelectorAll('.tips-block,.tips-divider,.tips-prev').forEach(c => c.remove());
+
+  // Current tips as plain text
+  const lines = [
+    tips.dig  ? `<div class="tip-line dig"><span class="tip-emoji">🔍</span>${escHtml(tips.dig)}</div>`   : '',
+    tips.next ? `<div class="tip-line next"><span class="tip-emoji">⚡</span>${escHtml(tips.next)}</div>` : '',
+    tips.why  ? `<div class="tip-line why"><span class="tip-emoji">❓</span>${escHtml(tips.why)}</div>`   : '',
+  ].join('');
+  el.insertAdjacentHTML('beforeend', `<div class="tips-block">${lines}</div>`);
+
+  // Previous tips (faded)
+  tipHistory.slice(1).forEach(t => {
+    const prev = [t.dig, t.next, t.why].filter(Boolean).join(' · ');
+    if (prev) {
+      el.insertAdjacentHTML('beforeend',
+        `<hr class="tips-divider"><div class="tips-prev">${escHtml(prev)}</div>`);
+    }
+  });
 }
 
 // ── Plan render ────────────────────────────────────────────────────────────
