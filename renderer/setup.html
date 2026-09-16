@@ -118,15 +118,17 @@
         🔗 Подключение к агенту ▸
       </div>
       <div id="agentSettings" style="display:none;margin-top:8px">
+        <div id="agentCurrent" style="font-size:11px;color:#94a3b8;margin-bottom:8px"></div>
         <label>URL агента</label>
         <input type="text" id="agentUrl" placeholder="https://recruiter-assistant.ru">
-        <label style="margin-top:8px">Токен (AGENT_SECRET)</label>
-        <input type="password" id="agentToken" placeholder="Токен из настроек агента">
         <label style="margin-top:8px">Профиль</label>
         <input type="text" id="agentProfile" placeholder="recruiter">
+        <label style="margin-top:8px">Токен Call Tips</label>
+        <input type="password" id="agentToken" placeholder="Спроси у агента: «дай токен для call tips»">
         <div id="agentStatus" style="font-size:11px;color:#6366f1;margin-top:6px;min-height:14px"></div>
         <div class="actions" style="margin-top:8px">
           <button class="btn btn-secondary" id="btnConnect" style="background:#1a2035;border-color:#3d4268;color:#818cf8">🔗 Проверить соединение</button>
+          <button class="btn btn-secondary" id="btnLogout" style="background:#2a1520;border-color:#4a2138;color:#f87171">🚪 Выйти</button>
         </div>
       </div>
     </div>
@@ -165,18 +167,41 @@ function loadAgentSettings() {
   try {
     document.getElementById('agentUrl').value     = localStorage.getItem('agentUrl')     || 'https://recruiter-assistant.ru';
     document.getElementById('agentToken').value   = localStorage.getItem('agentToken')   || '';
-    document.getElementById('agentProfile').value = localStorage.getItem('agentProfile') || 'recruiter';
-    if (localStorage.getItem('agentToken')) {
-      document.getElementById('agentToggle').innerHTML = '🔗 Подключение к агенту ✅ ▸';
-    }
+    document.getElementById('agentProfile').value = localStorage.getItem('agentProfile') || '';
+    refreshAgentStatusLine();
   } catch {}
+}
+// Always show the currently saved profile — no silent "still logged in as
+// whoever configured this last" state; the user sees it the moment they open settings.
+function refreshAgentStatusLine() {
+  const profile = localStorage.getItem('agentProfile') || '';
+  const hasToken = !!localStorage.getItem('agentToken');
+  const current = document.getElementById('agentCurrent');
+  if (hasToken && profile) {
+    current.textContent = `Текущий профиль: ${profile}. Это не ты? Нажми «Выйти».`;
+    document.getElementById('agentToggle').innerHTML = `🔗 Подключение к агенту ✅ (${profile}) ▸`;
+  } else {
+    current.textContent = 'Не подключено — введи данные ниже.';
+    document.getElementById('agentToggle').innerHTML = '🔗 Подключение к агенту ▸';
+  }
 }
 function saveAgentSettings() {
   try {
     localStorage.setItem('agentUrl',     document.getElementById('agentUrl').value.trim());
     localStorage.setItem('agentToken',   document.getElementById('agentToken').value.trim());
-    localStorage.setItem('agentProfile', document.getElementById('agentProfile').value.trim() || 'recruiter');
+    localStorage.setItem('agentProfile', document.getElementById('agentProfile').value.trim());
+    refreshAgentStatusLine();
   } catch {}
+}
+function logoutAgent() {
+  try {
+    localStorage.removeItem('agentToken');
+    localStorage.removeItem('agentProfile');
+  } catch {}
+  document.getElementById('agentToken').value = '';
+  document.getElementById('agentProfile').value = '';
+  document.getElementById('agentStatus').textContent = '';
+  refreshAgentStatusLine();
 }
 function getAgentOpts() {
   return {
@@ -193,6 +218,7 @@ function toggleAgentSettings() {
     open ? '🔗 Подключение к агенту ▸' : '🔗 Подключение к агенту ▾';
 }
 loadAgentSettings();
+document.getElementById('btnLogout').addEventListener('click', logoutAgent);
 
 document.getElementById('btnConnect').addEventListener('click', async () => {
   saveAgentSettings();
@@ -206,7 +232,7 @@ document.getElementById('btnConnect').addEventListener('click', async () => {
     agentStatus.textContent = '❌ ' + data.error;
   } else {
     agentStatus.textContent = `✅ Соединение OK — найден кандидат: ${data.candidateName || '(без имени)'}`;
-    document.getElementById('agentToggle').innerHTML = '🔗 Подключение к агенту ✅ ▸';
+    refreshAgentStatusLine();
   }
 });
 

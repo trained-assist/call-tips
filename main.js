@@ -183,17 +183,18 @@ ipcMain.handle('stop-call', () => {
 
 // Load latest Call Tips session from trained-assist-agent via HTTP endpoint
 ipcMain.handle('load-agent-session', (_, opts = {}) => {
-  const agentUrl    = opts.url     || process.env.AGENT_URL     || 'https://recruiter-assistant.ru';
-  const agentSecret = opts.secret  || process.env.AGENT_SECRET  || '';
-  const profile     = opts.profile || process.env.AGENT_PROFILE || 'recruiter';
+  const agentUrl   = opts.url     || process.env.AGENT_URL     || 'https://recruiter-assistant.ru';
+  // Scoped per-profile token from the agent (calltips_get_login) — NOT the agent's master secret.
+  const agentToken = opts.secret  || process.env.AGENT_TOKEN   || '';
+  const profile    = opts.profile || process.env.AGENT_PROFILE || '';
+  if (!profile || !agentToken) return Promise.resolve(tryLocalFallback());
 
   return new Promise((resolve) => {
-    const urlParsed = new URL(`${agentUrl}/calltips-session?profile=${encodeURIComponent(profile)}`);
+    const urlParsed = new URL(`${agentUrl}/calltips-session?profile=${encodeURIComponent(profile)}&token=${encodeURIComponent(agentToken)}`);
     const options = {
       hostname: urlParsed.hostname,
       path: urlParsed.pathname + urlParsed.search,
       method: 'GET',
-      headers: { Authorization: `Bearer ${agentSecret}` },
       timeout: 8000,
     };
     const mod = urlParsed.protocol === 'https:' ? https : require('http');
@@ -249,9 +250,12 @@ ipcMain.handle('toggle-pin', () => {
 
 // Call Tips — get coaching tip from agent (avoids OPENROUTER key in client)
 ipcMain.handle('calltips-tips', (_, opts = {}) => {
-  const agentUrl    = opts.url     || process.env.AGENT_URL     || 'https://recruiter-assistant.ru';
-  const agentSecret = opts.secret  || process.env.AGENT_SECRET  || '';
-  const body = JSON.stringify(opts.payload || {});
+  const agentUrl   = opts.url     || process.env.AGENT_URL     || 'https://recruiter-assistant.ru';
+  // Scoped per-profile token from the agent (calltips_get_login) — NOT the agent's master secret.
+  const agentToken = opts.secret  || process.env.AGENT_TOKEN   || '';
+  const profile    = opts.profile || process.env.AGENT_PROFILE || '';
+  if (!profile || !agentToken) return Promise.resolve(null);
+  const body = JSON.stringify({ ...(opts.payload || {}), profile, token: agentToken });
 
   return new Promise((resolve) => {
     const urlParsed = new URL(`${agentUrl}/calltips-tips`);
@@ -261,7 +265,6 @@ ipcMain.handle('calltips-tips', (_, opts = {}) => {
       path: urlParsed.pathname,
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${agentSecret}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
       },
