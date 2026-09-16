@@ -340,11 +340,12 @@ async function maybeFetchTips() {
         return {
           url: localStorage.getItem('agentUrl') || undefined,
           secret: localStorage.getItem('agentToken') || undefined,
+          profile: localStorage.getItem('agentProfile') || undefined,
         };
       } catch { return {}; }
     })();
 
-    if (agentOpts.secret) {
+    if (agentOpts.secret && agentOpts.profile) {
       tips = await window.api.calltipsTips({
         ...agentOpts,
         payload: {
