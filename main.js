@@ -296,7 +296,7 @@ ipcMain.handle('calltips-tips', (_, opts = {}) => {
 });
 
 // LM Ladder proxy — one endpoint walks the model list, no provider keys in the client
-ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode }) => {
+ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode, temperature }) => {
   const token = ladderToken();
   if (!token) return Promise.reject(new Error('нет LADDER_TOKEN (env или ~/.llm-ladder-token)'));
 
@@ -305,6 +305,7 @@ ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode }) => {
       model: model || 'service',
       messages,
       max_tokens: maxTokens || 400,
+      ...(temperature != null ? { temperature } : {}),
       ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
     });
 

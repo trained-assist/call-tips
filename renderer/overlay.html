@@ -116,6 +116,27 @@
   .sys-btn.active { border-color: #4ade80; color: #4ade80; }
 
   .status-bar { padding: 4px 12px; font-size: 10px; color: #4a5568; border-top: 1px solid rgba(255,255,255,.05); flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-app-region: no-drag; }
+
+  /* Coach bar — тема + ручной запрос подсказки */
+  .coach-bar { display: flex; gap: 6px; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.07); flex-shrink: 0; -webkit-app-region: no-drag; }
+  .topic-input {
+    flex: 1; min-width: 0; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px; padding: 4px 8px; color: #e2e8f0; font-size: 11px; font-family: inherit;
+  }
+  .topic-input::placeholder { color: #4a5568; }
+  .topic-input:focus { outline: none; border-color: #6366f1; }
+  .ask-btn {
+    background: rgba(99,102,241,.2); border: 1px solid rgba(99,102,241,.4); color: #a5b4fc;
+    border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .ask-btn:hover:not(:disabled) { background: rgba(99,102,241,.32); }
+  .ask-btn:disabled { opacity: .5; cursor: default; }
+
+  /* Running summary */
+  .summary-box { border-left: 2px solid rgba(99,102,241,.5); padding: 2px 0 2px 8px; margin-bottom: 10px; }
+  .summary-label { display: block; font-size: 9px; color: #6366f1; text-transform: uppercase; letter-spacing: .5px; }
+  .summary-text { font-size: 11px; line-height: 1.5; color: #94a3b8; }
+  .summary-text:empty::after { content: '— ещё нет —'; color: #4a5568; }
 </style>
 </head>
 <body>
@@ -133,8 +154,17 @@
     <div class="tab" data-tab="transcript">📝 Транскрипт</div>
   </div>
 
+  <div class="coach-bar">
+    <input type="text" id="topicInput" class="topic-input" placeholder="Тема (пусто — возьму из разговора)">
+    <button class="ask-btn" id="askBtn">⚡ Уточняющий вопрос</button>
+  </div>
+
   <div class="content">
     <div class="pane active" id="pane-tips">
+      <div class="summary-box">
+        <span class="summary-label">Саммари</span>
+        <span class="summary-text" id="summaryText"></span>
+      </div>
       <div class="no-tips" id="noTips">Слушаю…</div>
     </div>
     <div class="pane" id="pane-plan">
@@ -164,6 +194,13 @@ let sysStream = null;
 let isFetchingTips = false;
 let questionsAsked = new Set();
 let tipHistory = []; // [{dig, next, why}] — last 5 sets
+
+// Фоновое саммари: обновляется блоками, не по всему транскрипту
+const LLM_MODEL = 'service';
+const SUMMARY_BLOCK = 6;   // сколько новых финальных реплик копим до обновления саммари
+let summary = '';
+let summarizedUpTo = 0;
+let isSummarizing = false;
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
@@ -296,7 +333,7 @@ function connectDeepgram(apiKey, lang, speaker) {
       }
       finalCount++;
       renderTranscript();
-      if (finalCount % 2 === 0) maybeFetchTips();
+      maybeUpdateSummary();
     } else {
       if (interimIdx >= 0 && transcript[interimIdx]) {
         transcript[interimIdx] = { speaker, text, final: false };
@@ -323,10 +360,55 @@ function renderTranscript() {
   el.scrollTop = el.scrollHeight;
 }
 
-// ── Tips fetch ─────────────────────────────────────────────────────────────
-async function maybeFetchTips() {
+// ── Фоновое саммари (блоками) ──────────────────────────────────────────────
+function maybeUpdateSummary() {
+  if (isSummarizing || !session) return;
+  const finals = transcript.filter(l => l.final);
+  if (finals.length - summarizedUpTo < SUMMARY_BLOCK) return;
+  updateSummary(finals);
+}
+
+async function updateSummary(finals) {
+  const from = summarizedUpTo;
+  const block = finals.slice(from);
+  isSummarizing = true;
+  setStatus('📝 Обновляю саммари…');
+  try {
+    const raw = await window.api.llmCall({
+      model: LLM_MODEL,
+      temperature: 0,
+      maxTokens: 350,
+      messages: [{ role: 'user', content: summaryPrompt(summary, block) }],
+    });
+    summary = raw.trim();
+    summarizedUpTo = from + block.length;
+    document.getElementById('summaryText').textContent = summary;
+    setStatus('✅ Саммари обновлено');
+  } catch (e) {
+    setStatus('⚠️ Саммари: ' + e.message);
+  }
+  isSummarizing = false;
+}
+
+function summaryPrompt(prev, block) {
+  const lines = block.map(l => `${l.speaker === 'me' ? 'Рекрутер' : 'Кандидат'}: ${l.text}`).join('\n');
+  return `Ты ведёшь краткие заметки интервью. Обнови саммари разговора.
+
+ПРЕДЫДУЩЕЕ САММАРИ:
+${prev || '(разговор только начинается)'}
+
+НОВЫЙ БЛОК РЕПЛИК:
+${lines}
+
+Задача: сохрани из предыдущего саммари всё, что ещё важно, и добавь новое. Не выдумывай — только то, что было сказано.
+Верни 1–3 предложения о том, что обсудили и что важно дальше. Только текст саммари, без JSON и без заголовков.`;
+}
+
+// ── Уточняющий вопрос — по кнопке рекрутера ──────────────────────────────
+async function askQuestion() {
   if (isFetchingTips || !session) return;
   isFetchingTips = true;
+  document.getElementById('askBtn').disabled = true;
   setStatus('⏳ Думаю над подсказкой…');
 
   const finalTranscript = transcript.filter(l => l.final);
@@ -356,14 +438,22 @@ async function maybeFetchTips() {
           askedQuestions: [...questionsAsked],
         },
       });
+      // Агент отдаёт {dig:'',next:'',why:''}, когда его own LLM-вызов не успел —
+      // это не ответ, а пустышка. Считаем как отсутствие и идём в фолбэк.
+      if (tips && !(tips.dig || tips.next || tips.why)) tips = null;
     }
 
     // Fallback: direct LM Ladder call
     if (!tips) {
       const planContext = buildPlanContext();
-      const recent = finalTranscript.slice(-20).map(l =>
+      const recent = finalTranscript.slice(-12).map(l =>
         `${l.speaker === 'me' ? 'Я' : 'Они'}: ${l.text}`
       ).join('\n');
+
+      const topic = document.getElementById('topicInput').value.trim();
+      const topicLine = topic
+        ? `ТЕМА (задана рекрутером, приоритет): ${topic}`
+        : 'ТЕМА: определи сам из разговора — о чём говорили с кандидатом прямо сейчас.';
 
       const messages = [{
         role: 'user',
@@ -372,7 +462,10 @@ async function maybeFetchTips() {
 ПРАВИЛО: зацепись за конкретное слово или деталь из последней реплики собеседника. Не оценивай — уточняй.
 
 Собеседник: ${session.candidateName || 'собеседник'}
-Тема: ${(session.jobText || '').slice(0, 300) || '(не указана)'}
+${topicLine}
+${session.jobText ? `Вакансия: ${session.jobText.slice(0, 300)}\n` : ''}
+САММАРИ РАЗГОВОРА:
+${summary || '(саммари ещё нет)'}
 
 ПЛАН (незаданные вопросы):
 ${planContext || '(без плана)'}
@@ -385,17 +478,20 @@ ${recent || '(пока нет)'}
 Язык: ${session.lang === 'en' ? 'English' : 'русский'}.`,
       }];
 
-      const raw = await window.api.llmCall({ messages, maxTokens: 300, jsonMode: true });
+      const raw = await window.api.llmCall({ model: LLM_MODEL, temperature: 0, messages, maxTokens: 300, jsonMode: true });
       tips = JSON.parse(raw);
     }
 
     if (tips) renderTips(tips);
-    setStatus('✅ Deepgram подключён, говорите…');
+    setStatus('✅ Готово');
   } catch (e) {
     setStatus('Ошибка LLM: ' + e.message);
   }
+  document.getElementById('askBtn').disabled = false;
   isFetchingTips = false;
 }
+
+document.getElementById('askBtn').addEventListener('click', askQuestion);
 
 function buildPlanContext() {
   if (!session?.plan?.sections) return '';
