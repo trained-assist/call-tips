@@ -320,6 +320,7 @@ ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode, temperatu
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
+        'x-ladder-app': 'call-tips',
         'Content-Length': Buffer.byteLength(body),
       },
       timeout: 60000,
