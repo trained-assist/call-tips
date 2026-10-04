@@ -8,7 +8,7 @@ AI-коучинг в реальном времени во время интер�
 
 - 🎙 Захват микрофона → транскрипция через Deepgram nova-3
 - 🔊 Захват звука встречи (поделитесь экраном — работает на Windows автоматически)
-- ⚡ Подсказки в реальном времени через Gemini 2.5 Flash Lite (OpenRouter)
+- ⚡ Подсказки в реальном времени через LM Ladder (OpenAI-совместимый endpoint)
 - 📋 Генерация плана интервью перед звонком
 - 🗂 Отметить вопрос как заданный — кликом в панели плана
 - Overlay поверх всех окон, полупрозрачный, draggable
@@ -18,7 +18,7 @@ AI-коучинг в реальном времени во время интер�
 ```bash
 # 1. Создайте .env
 cp .env.example .env
-# Заполните DEEPGRAM_API_KEY и OPENROUTER_API_KEY
+# Заполните DEEPGRAM_API_KEY и LADDER_TOKEN
 
 # 2. Установите зависимости
 npm install
@@ -42,7 +42,8 @@ npm run build:mac
 | Ключ | Где взять |
 |------|-----------|
 | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) — free tier: 200 часов |
-| `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) — Gemini Flash Lite очень дёшевый |
+| `LADDER_TOKEN` | токен лестницы: env `LADDER_TOKEN` или файл `~/.llm-ladder-token` |
+| `LADDER_URL` | по умолчанию `https://llm-ladder.trainedassist.store` |
 
 ## Сценарии использования
 
@@ -67,17 +68,17 @@ npm run build:mac
 main.js (Electron main)
   ├─ Создаёт Setup window (480×740, top-right)
   ├─ Создаёт Overlay window (380×340, alwaysOnTop, transparent)
-  ├─ Проксирует OpenRouter API calls (обходит CORS)
+  ├─ Проксирует LM Ladder API calls (обходит CORS)
   └─ Читает .env → передаёт ключи через IPC
 
 renderer/setup.html
   └─ Форма: имя, длительность, резюме, JD, язык
-  └─ Генерация плана через OpenRouter (через IPC)
+  └─ Генерация плана через LM Ladder (через IPC)
 
 renderer/overlay.html
   ├─ Mic: getUserMedia → AudioWorklet → PCM Int16 → Deepgram WS
   ├─ System audio: getDisplayMedia → AudioWorklet → отдельный Deepgram WS
-  └─ Транскрипты → каждые 2 финальных → OpenRouter tips
+  └─ Транскрипты → каждые 2 финальных → LM Ladder tips
 
 renderer/audio-processor.js (AudioWorklet)
   └─ Float32 → Int16 PCM conversion
@@ -89,7 +90,7 @@ renderer/audio-processor.js (AudioWorklet)
 |--|--|--|
 | Системный звук | ScreenCaptureKit (автоматически) | getDisplayMedia (нужно поделиться экраном) |
 | Установка | .dmg | .exe / .dmg |
-| Оффлайн | Нет (нужны Deepgram + OpenRouter) | Нет |
+| Оффлайн | Нет (нужны Deepgram + LM Ladder) | Нет |
 | Производительность | Нативная | Chrome-based |
 | Тray icon | MenuBarExtra | Electron Tray |
 

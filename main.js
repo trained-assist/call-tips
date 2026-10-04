@@ -1,8 +1,22 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const https = require('https');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// ── LM Ladder (OpenAI-compatible, https://llm-ladder.trainedassist.store) ────
+const LADDER_URL = (process.env.LADDER_URL || 'https://llm-ladder.trainedassist.store').replace(/\/+$/, '');
+
+function ladderToken() {
+  if (process.env.LADDER_TOKEN) return process.env.LADDER_TOKEN.trim();
+  try {
+    return fs.readFileSync(path.join(os.homedir(), '.llm-ladder-token'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
 
 let setupWindow = null;
 let overlayWindow = null;
@@ -148,7 +162,7 @@ app.whenReady().then(() => {
 // ── IPC ────────────────────────────────────────────────────────────────────
 ipcMain.handle('get-config', () => ({
   deepgramKey: process.env.DEEPGRAM_API_KEY || '',
-  openrouterKey: process.env.OPENROUTER_API_KEY || '',
+  llmReady: Boolean(ladderToken()),
 }));
 
 ipcMain.handle('start-call', (_, sessionData) => {
@@ -281,42 +295,56 @@ ipcMain.handle('calltips-tips', (_, opts = {}) => {
   });
 });
 
-// OpenRouter proxy (avoids CORS in renderer)
+// LM Ladder proxy — one endpoint walks the model list, no provider keys in the client
 ipcMain.handle('llm-call', (_, { model, messages, maxTokens, jsonMode }) => {
+  const token = ladderToken();
+  if (!token) return Promise.reject(new Error('нет LADDER_TOKEN (env или ~/.llm-ladder-token)'));
+
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: model || 'google/gemini-2.5-flash-lite',
+      model: model || 'service',
       messages,
       max_tokens: maxTokens || 400,
       ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
     });
 
+    const target = new URL(`${LADDER_URL}/v1/chat/completions`);
     const req = https.request({
-      hostname: 'openrouter.ai',
-      path: '/api/v1/chat/completions',
+      hostname: target.hostname,
+      path: target.pathname,
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'X-Title': 'call-tips-win',
         'Content-Length': Buffer.byteLength(body),
       },
-      timeout: 15000,
+      timeout: 60000,
     }, (res) => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
+        let parsed;
         try {
-          const parsed = JSON.parse(data);
-          resolve(parsed.choices?.[0]?.message?.content || '');
+          parsed = JSON.parse(data);
         } catch {
-          reject(new Error('JSON parse error'));
+          reject(new Error(`ladder ${res.statusCode}: не-JSON ответ (${data.slice(0, 120)})`));
+          return;
         }
+        if (parsed.error) {
+          reject(new Error(`ladder ${res.statusCode}: ${parsed.error.message || JSON.stringify(parsed.error)}`));
+          return;
+        }
+        const content = parsed.choices?.[0]?.message?.content || '';
+        if (!content) {
+          reject(new Error(`ladder ${res.statusCode}: пустой ответ модели`));
+          return;
+        }
+        resolve(content);
       });
     });
 
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('ladder timeout')); });
     req.write(body);
     req.end();
   });

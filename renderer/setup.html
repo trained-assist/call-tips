@@ -154,8 +154,8 @@ window.api.getConfig().then(c => {
   if (!c.deepgramKey) {
     document.getElementById('keyHint').innerHTML = '⚠️ Нет <span>DEEPGRAM_API_KEY</span> в .env';
   }
-  if (!c.openrouterKey) {
-    document.getElementById('status').textContent = 'Нет OPENROUTER_API_KEY — план недоступен';
+  if (!c.llmReady) {
+    document.getElementById('status').textContent = 'Нет LADDER_TOKEN — план недоступен';
     document.getElementById('btnPlan').disabled = true;
   }
 });

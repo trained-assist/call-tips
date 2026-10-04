@@ -358,7 +358,7 @@ async function maybeFetchTips() {
       });
     }
 
-    // Fallback: direct OpenRouter (needs OPENROUTER_API_KEY in .env)
+    // Fallback: direct LM Ladder call
     if (!tips) {
       const planContext = buildPlanContext();
       const recent = finalTranscript.slice(-20).map(l =>
